@@ -59,6 +59,11 @@ const expenseSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
+  },
+  status: {
+    type: String,
+    enum: ['open', 'closed'],
+    default: 'open'
   }
 }, { timestamps: true });
 

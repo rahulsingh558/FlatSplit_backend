@@ -35,6 +35,8 @@ const flatRoutes = require('./routes/flats');
 const messageRoutes = require('./routes/messages');
 const expenseRoutes = require('./routes/expenses');
 const settlementRoutes = require('./routes/settlements');
+const directMessageRoutes = require('./routes/directMessages');
+const personalExpenseRoutes = require('./routes/personalExpenses');
 
 // Middleware
 app.use(express.json());
@@ -45,6 +47,10 @@ app.use(cors({
   credentials: true
 }));
 
+// Serve uploaded files statically
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 app.use(passport.initialize());
 
 // Routes
@@ -53,6 +59,8 @@ app.use('/api/flats', flatRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/settlements', settlementRoutes);
+app.use('/api/direct-messages', directMessageRoutes);
+app.use('/api/personal-expenses', personalExpenseRoutes);
 
 // Basic route
 app.get('/', (req, res) => {

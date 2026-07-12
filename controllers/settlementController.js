@@ -63,7 +63,7 @@ const getFlatBalances = async (req, res) => {
       userIds.add(d.to);
     });
 
-    const users = await User.find({ _id: { $in: Array.from(userIds) } }).select('name avatar');
+    const users = await User.find({ _id: { $in: Array.from(userIds) } }).select('name avatar upiId');
     const userMap = {};
     users.forEach(u => userMap[u._id.toString()] = u);
 
@@ -85,7 +85,7 @@ const getFlatBalances = async (req, res) => {
 // @access  Private
 const recordSettlement = async (req, res) => {
   try {
-    const { toUserId, amount, method } = req.body;
+    const { toUserId, amount, method, isReceiverRecording } = req.body;
     const flatId = req.params.flatId;
 
     if (!toUserId || !amount) {
@@ -105,24 +105,29 @@ const recordSettlement = async (req, res) => {
       proofUrl = uploadResult.secure_url;
     }
 
+    const fromUserId = isReceiverRecording === 'true' ? toUserId : req.user._id;
+    const actualToUserId = isReceiverRecording === 'true' ? req.user._id : toUserId;
+
     // Create Settlement
     const settlement = await Settlement.create({
       flat: flatId,
-      from: req.user._id,
-      to: toUserId,
+      from: fromUserId,
+      to: actualToUserId,
       amount: parseFloat(amount),
       method: method || 'cash',
       proofOfPayment: proofUrl
     });
 
-    // Fetch Receiver Name
-    const receiver = await User.findById(toUserId).select('name');
+    // Fetch Other User Name
+    const otherUser = await User.findById(toUserId).select('name');
 
     // Create corresponding Message for the Chat Feed
     const message = await Message.create({
       flat: flatId,
       sender: req.user._id,
-      content: `${req.user.name.split(' ')[0]} paid ${receiver.name.split(' ')[0]} ₹${amount}`,
+      content: isReceiverRecording === 'true'
+        ? `${req.user.name.split(' ')[0]} recorded a payment of ₹${amount} received from ${otherUser.name.split(' ')[0]}`
+        : `${req.user.name.split(' ')[0]} paid ${otherUser.name.split(' ')[0]} ₹${amount}`,
       imageUrl: proofUrl,
       type: 'settlement',
       readBy: [req.user._id]

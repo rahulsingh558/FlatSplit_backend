@@ -1,5 +1,8 @@
 const Flat = require('../models/Flat');
 const User = require('../models/User');
+const Expense = require('../models/Expense');
+const Message = require('../models/Message');
+const Settlement = require('../models/Settlement');
 const generateInviteCode = require('../utils/generateInviteCode');
 
 // @desc    Create new flat
@@ -82,7 +85,7 @@ const joinFlat = async (req, res) => {
 const getFlat = async (req, res) => {
   try {
     const flat = await Flat.findById(req.params.id)
-      .populate('members.user', 'name email avatar')
+      .populate('members.user', 'name email avatar upiId')
       .populate('createdBy', 'name');
 
     if (!flat) {
@@ -110,10 +113,85 @@ const getMyFlats = async (req, res) => {
     const user = await User.findById(req.user._id).populate({
       path: 'flats',
       select: '_id name inviteCode members',
-      populate: { path: 'members.user', select: '_id name avatar' }
+      populate: { path: 'members.user', select: '_id name avatar upiId' }
     });
 
     res.status(200).json({ success: true, data: user.flats });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Update a flat
+// @route   PUT /api/flats/:id
+// @access  Private
+const updateFlat = async (req, res) => {
+  try {
+    const { name } = req.body;
+    const flat = await Flat.findById(req.params.id);
+
+    if (!flat) {
+      return res.status(404).json({ success: false, error: 'Flat not found' });
+    }
+
+    // Verify user is the creator or an admin
+    const isCreator = flat.createdBy.toString() === req.user._id.toString();
+    const isAdmin = flat.members.some(member => 
+      member.user.toString() === req.user._id.toString() && member.role === 'admin'
+    );
+    
+    if (!isCreator && !isAdmin) {
+      return res.status(401).json({ success: false, error: 'Not authorized to update this flat' });
+    }
+
+    if (name) flat.name = name;
+    await flat.save();
+
+    res.status(200).json({ success: true, data: flat });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Delete a flat
+// @route   DELETE /api/flats/:id
+// @access  Private
+const deleteFlat = async (req, res) => {
+  try {
+    const flat = await Flat.findById(req.params.id);
+
+    if (!flat) {
+      return res.status(404).json({ success: false, error: 'Flat not found' });
+    }
+
+    // Verify user is the creator
+    if (flat.createdBy.toString() !== req.user._id.toString()) {
+      return res.status(401).json({ success: false, error: 'Only the creator can delete the flat' });
+    }
+
+    // Remove flat ID from all users' flats array
+    await User.updateMany(
+      { flats: flat._id },
+      { $pull: { flats: flat._id } }
+    );
+
+    // Cascading deletes for related data
+    await Expense.deleteMany({ flat: flat._id });
+    await Message.deleteMany({ flat: flat._id });
+    await Settlement.deleteMany({ flat: flat._id });
+    
+    // Also delete personal expenses and direct messages if they exist
+    const PersonalExpense = require('../models/PersonalExpense');
+    const DirectMessage = require('../models/DirectMessage');
+    const PersonalSettlement = require('../models/PersonalSettlement');
+    
+    await PersonalExpense.deleteMany({ flat: flat._id });
+    await DirectMessage.deleteMany({ flat: flat._id });
+    await PersonalSettlement.deleteMany({ flat: flat._id });
+
+    await flat.deleteOne();
+
+    res.status(200).json({ success: true, data: {} });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -123,5 +201,7 @@ module.exports = {
   createFlat,
   joinFlat,
   getFlat,
-  getMyFlats
+  getMyFlats,
+  updateFlat,
+  deleteFlat
 };

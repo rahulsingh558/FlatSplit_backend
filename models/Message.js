@@ -20,7 +20,7 @@ const messageSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['text', 'expense_notification', 'settlement_notification'],
+    enum: ['text', 'expense', 'settlement', 'expense_notification', 'settlement_notification'],
     default: 'text'
   },
   relatedExpense: {
