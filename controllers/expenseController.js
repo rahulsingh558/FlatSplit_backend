@@ -268,9 +268,60 @@ const closeExpense = async (req, res) => {
   }
 };
 
+// @desc    Get expenses between current user and another user in a flat
+// @route   GET /api/expenses/flat/:flatId/between/:userId
+// @access  Private
+const getExpensesBetweenUsers = async (req, res) => {
+  try {
+    const { flatId, userId: targetUserId } = req.params;
+    const currentUserId = req.user._id;
+
+    // Verify user is in flat
+    const flat = await require('../models/Flat').findById(flatId);
+    if (!flat) return res.status(404).json({ success: false, error: 'Flat not found' });
+
+    const isMember = flat.members.some(m => m.user.toString() === currentUserId.toString());
+    if (!isMember) return res.status(403).json({ success: false, error: 'Not authorized' });
+
+    // Find group expenses in this flat where both users are part of splitAmong
+    const expenses = await Expense.find({
+      flat: flatId,
+      'splitAmong.user': { $all: [currentUserId, targetUserId] }
+    })
+      .populate('paidBy', 'name avatar')
+      .populate('flat', 'name')
+      .sort('-date');
+
+    // Also get personal expenses between these two users
+    const PersonalExpense = require('../models/PersonalExpense');
+    const personalExpenses = await PersonalExpense.find({
+      flat: flatId,
+      $or: [
+        { paidBy: currentUserId, owedBy: targetUserId },
+        { paidBy: targetUserId, owedBy: currentUserId }
+      ]
+    })
+      .populate('paidBy', 'name avatar')
+      .populate('owedBy', 'name avatar')
+      .sort('-date');
+
+    res.status(200).json({
+      success: true,
+      data: {
+        groupExpenses: expenses,
+        personalExpenses: personalExpenses
+      }
+    });
+  } catch (error) {
+    console.error('Error getting expenses between users:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 module.exports = {
   createExpense,
   getMyExpenses,
   updateExpense,
-  closeExpense
+  closeExpense,
+  getExpensesBetweenUsers
 };
