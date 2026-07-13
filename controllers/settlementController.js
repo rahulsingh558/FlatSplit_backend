@@ -53,7 +53,7 @@ const getFlatBalances = async (req, res) => {
     const settlements = await Settlement.find({ flat: flatId });
 
     // Calculate simplified debts
-    const debts = calculateBalances(expenses, settlements);
+    const debts = calculateBalances(expenses, settlements, flat.settlementType);
 
     // Populate user details for the debts
     // Collect unique user IDs

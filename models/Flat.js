@@ -30,6 +30,11 @@ const flatSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
+  },
+  settlementType: {
+    type: String,
+    enum: ['one-to-one', 'overall'],
+    default: 'overall'
   }
 }, { timestamps: true });
 

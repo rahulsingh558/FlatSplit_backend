@@ -2,9 +2,65 @@
  * Calculates net balances for a flat based on all expenses and settlements.
  * @param {Array} expenses - List of all Expense documents for the flat
  * @param {Array} settlements - List of all Settlement documents for the flat
+ * @param {String} settlementType - 'overall' (simplified) or 'one-to-one' (detailed)
  * @returns {Array} List of debts in the format: { from: userId, to: userId, amount: number }
  */
-const calculateBalances = (expenses, settlements) => {
+const calculateBalances = (expenses, settlements, settlementType = 'overall') => {
+  if (settlementType === 'one-to-one') {
+    // One-to-one logic: track exact peer-to-peer debts
+    const debts = {}; // debts[from][to] = amount
+
+    const addDebt = (from, to, amount) => {
+      if (from === to) return;
+      if (!debts[from]) debts[from] = {};
+      if (!debts[from][to]) debts[from][to] = 0;
+      debts[from][to] += amount;
+    };
+
+    expenses.forEach(expense => {
+      const paidBy = expense.paidBy.toString();
+      expense.splitAmong.forEach(split => {
+        const user = split.user.toString();
+        addDebt(user, paidBy, split.amount);
+      });
+    });
+
+    settlements.forEach(settlement => {
+      const from = settlement.from.toString();
+      const to = settlement.to.toString();
+      // A settlement is 'from' paying 'to'. This reduces the debt that 'from' owes 'to'.
+      // We represent this by adding a counter-debt: 'to' owes 'from' the settlement amount.
+      // The net calculation will naturally cancel it out.
+      addDebt(to, from, settlement.amount);
+    });
+
+    const rawDebts = [];
+    const processedPairs = new Set();
+
+    Object.keys(debts).forEach(from => {
+      Object.keys(debts[from]).forEach(to => {
+        const pairId = [from, to].sort().join('-');
+        if (processedPairs.has(pairId)) return;
+        processedPairs.add(pairId);
+
+        const fromOwesTo = debts[from][to] || 0;
+        const toOwesFrom = (debts[to] && debts[to][from]) || 0;
+
+        const net = fromOwesTo - toOwesFrom;
+        const roundedNet = Math.round(net * 100) / 100;
+
+        if (roundedNet > 0) {
+          rawDebts.push({ from, to, amount: roundedNet });
+        } else if (roundedNet < 0) {
+          rawDebts.push({ from: to, to: from, amount: Math.abs(roundedNet) });
+        }
+      });
+    });
+
+    return rawDebts;
+  }
+
+  // default: 'overall' logic (Debt simplification)
   const balances = {};
 
   // 1. Calculate net balance for each user from expenses

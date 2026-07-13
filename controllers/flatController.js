@@ -127,7 +127,7 @@ const getMyFlats = async (req, res) => {
 // @access  Private
 const updateFlat = async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, settlementType } = req.body;
     const flat = await Flat.findById(req.params.id);
 
     if (!flat) {
@@ -145,6 +145,7 @@ const updateFlat = async (req, res) => {
     }
 
     if (name) flat.name = name;
+    if (settlementType) flat.settlementType = settlementType;
     await flat.save();
 
     res.status(200).json({ success: true, data: flat });
