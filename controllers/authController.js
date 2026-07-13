@@ -18,6 +18,12 @@ const googleCallback = (req, res) => {
   // Create token
   const token = generateToken(req.user._id);
 
+  const platform = req.query.state;
+
+  if (platform === 'android') {
+    return res.redirect(`flatsplit://login?token=${token}`);
+  }
+
   // Set JWT in HTTP-only cookie
   const options = {
     expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
@@ -85,9 +91,30 @@ const updateProfile = async (req, res) => {
   }
 };
 
+// @desc    Set HTTP-Only cookie via API
+// @route   POST /api/auth/set-cookie
+// @access  Public (Requires valid token)
+const setCookie = (req, res) => {
+  const { token } = req.body;
+  if (!token) {
+    return res.status(400).json({ success: false, error: 'No token provided' });
+  }
+
+  const options = {
+    expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+  };
+
+  res.cookie('token', token, options);
+  res.status(200).json({ success: true });
+};
+
 module.exports = {
   googleCallback,
   getMe,
   logout,
-  updateProfile
+  updateProfile,
+  setCookie
 };

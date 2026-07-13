@@ -1,13 +1,19 @@
 const express = require('express');
 const passport = require('passport');
-const { googleCallback, getMe, logout, updateProfile } = require('../controllers/authController');
+const { googleCallback, getMe, logout, updateProfile, setCookie } = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
 
 const router = express.Router();
 
 // @desc    Auth with Google
 // @route   GET /api/auth/google
-router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+router.get('/google', (req, res, next) => {
+  const platform = req.query.platform || 'web';
+  passport.authenticate('google', { 
+    scope: ['profile', 'email'],
+    state: platform
+  })(req, res, next);
+});
 
 // @desc    Google auth callback
 // @route   GET /api/auth/google/callback
@@ -26,6 +32,10 @@ router.get('/me', protect, getMe);
 // @desc    Logout user
 // @route   POST /api/auth/logout
 router.post('/logout', protect, logout);
+
+// @desc    Set HTTP-Only cookie from token (used for Mobile OAuth)
+// @route   POST /api/auth/set-cookie
+router.post('/set-cookie', setCookie);
 
 // @desc    Update user profile
 // @route   PUT /api/auth/profile
