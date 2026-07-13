@@ -1,5 +1,5 @@
 const express = require('express');
-const { createExpense, getMyExpenses, updateExpense, closeExpense, getExpensesBetweenUsers } = require('../controllers/expenseController');
+const { createExpense, getMyExpenses, updateExpense, closeExpense, getExpensesBetweenUsers, requestDeleteExpense, respondDeleteExpense } = require('../controllers/expenseController');
 const { protect } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 
@@ -20,5 +20,11 @@ router.route('/:id')
 
 router.route('/:id/status')
   .put(closeExpense);
+
+router.route('/:id')
+  .delete(requestDeleteExpense);
+
+router.route('/:id/delete-response')
+  .post(respondDeleteExpense);
 
 module.exports = router;

@@ -64,6 +64,17 @@ const expenseSchema = new mongoose.Schema({
     type: String,
     enum: ['open', 'closed'],
     default: 'open'
+  },
+  deleteRequest: {
+    requestedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    status: {
+      type: String,
+      enum: ['pending', 'rejected'],
+      default: null
+    }
   }
 }, { timestamps: true });
 

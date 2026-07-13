@@ -318,10 +318,139 @@ const getExpensesBetweenUsers = async (req, res) => {
   }
 };
 
+// @desc    Request to delete an expense
+// @route   DELETE /api/expenses/:id
+// @access  Private
+const requestDeleteExpense = async (req, res) => {
+  try {
+    const expense = await Expense.findById(req.params.id);
+    if (!expense) return res.status(404).json({ success: false, error: 'Expense not found' });
+
+    const flat = await Flat.findById(expense.flat);
+    if (!flat) return res.status(404).json({ success: false, error: 'Flat not found' });
+
+    const userId = req.user._id.toString();
+    const creatorId = expense.createdBy.toString();
+    
+    // Find the flat admin
+    const adminMember = flat.members.find(m => m.role === 'admin');
+    const adminId = adminMember ? adminMember.user.toString() : null;
+
+    if (userId !== creatorId && userId !== adminId) {
+      return res.status(403).json({ success: false, error: 'Only the creator or admin can delete this expense' });
+    }
+
+    // If user is both creator and admin, or if there is no admin
+    if ((userId === creatorId && userId === adminId) || !adminId) {
+      await Message.findOneAndDelete({ relatedExpense: expense._id });
+      await expense.deleteOne();
+      
+      const io = req.app.get('io');
+      if (io) {
+        io.to(flat._id.toString()).emit('expenseDeleted', expense._id);
+      }
+      return res.status(200).json({ success: true, message: 'Expense deleted' });
+    }
+
+    // Determine who needs to authorize
+    const needsAuthFrom = (userId === creatorId) ? adminId : creatorId;
+
+    expense.deleteRequest = {
+      requestedBy: req.user._id,
+      status: 'pending'
+    };
+    await expense.save();
+
+    const populatedExpense = await Expense.findById(expense._id)
+      .populate('createdBy', 'name')
+      .populate('deleteRequest.requestedBy', 'name');
+
+    // Notify the other party via socket
+    const io = req.app.get('io');
+    if (io) {
+      io.to(flat._id.toString()).emit('deleteExpenseRequest', {
+        expense: populatedExpense,
+        requester: req.user.name,
+        needsAuthFrom: needsAuthFrom
+      });
+      io.to(flat._id.toString()).emit('expenseUpdated', populatedExpense);
+    }
+
+    res.status(200).json({ success: true, message: 'Deletion request sent', data: expense });
+  } catch (error) {
+    console.error('Error requesting delete expense:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Approve or reject expense deletion
+// @route   POST /api/expenses/:id/delete-response
+// @access  Private
+const respondDeleteExpense = async (req, res) => {
+  try {
+    const { action } = req.body; // 'approve' or 'reject'
+    if (!['approve', 'reject'].includes(action)) {
+      return res.status(400).json({ success: false, error: 'Invalid action' });
+    }
+
+    const expense = await Expense.findById(req.params.id)
+      .populate('deleteRequest.requestedBy', 'name');
+      
+    if (!expense || !expense.deleteRequest || expense.deleteRequest.status !== 'pending') {
+      return res.status(400).json({ success: false, error: 'No pending deletion request found' });
+    }
+
+    const flat = await Flat.findById(expense.flat);
+    const userId = req.user._id.toString();
+    const creatorId = expense.createdBy.toString();
+    const adminMember = flat.members.find(m => m.role === 'admin');
+    const adminId = adminMember ? adminMember.user.toString() : null;
+
+    const requesterId = expense.deleteRequest.requestedBy._id.toString();
+    const authorizedResponderId = (requesterId === creatorId) ? adminId : creatorId;
+
+    if (userId !== authorizedResponderId) {
+      return res.status(403).json({ success: false, error: 'You are not authorized to respond to this request' });
+    }
+
+    const io = req.app.get('io');
+
+    if (action === 'approve') {
+      await Message.findOneAndDelete({ relatedExpense: expense._id });
+      await expense.deleteOne();
+      
+      if (io) {
+        io.to(flat._id.toString()).emit('expenseDeleted', expense._id);
+      }
+      return res.status(200).json({ success: true, message: 'Expense deleted' });
+    } else {
+      expense.deleteRequest.status = 'rejected';
+      await expense.save();
+      
+      if (io) {
+        io.to(flat._id.toString()).emit('deleteExpenseRejected', {
+          expenseId: expense._id,
+          rejectedBy: req.user.name,
+          requestedBy: requesterId
+        });
+        
+        const populatedExpense = await Expense.findById(expense._id);
+        io.to(flat._id.toString()).emit('expenseUpdated', populatedExpense);
+      }
+      return res.status(200).json({ success: true, message: 'Deletion request rejected' });
+    }
+  } catch (error) {
+    console.error('Error responding to delete expense:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 module.exports = {
   createExpense,
   getMyExpenses,
   updateExpense,
   closeExpense,
-  getExpensesBetweenUsers
+  getExpensesBetweenUsers,
+  requestDeleteExpense,
+  respondDeleteExpense
 };
