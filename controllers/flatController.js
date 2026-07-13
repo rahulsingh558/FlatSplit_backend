@@ -198,11 +198,101 @@ const deleteFlat = async (req, res) => {
   }
 };
 
+// @desc    Add member to flat manually by email
+// @route   POST /api/flats/:id/members
+// @access  Private
+const addMember = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const flat = await Flat.findById(req.params.id);
+
+    if (!flat) {
+      return res.status(404).json({ success: false, error: 'Flat not found' });
+    }
+
+    // Verify user is the creator or an admin
+    const isCreator = flat.createdBy.toString() === req.user._id.toString();
+    const isAdmin = flat.members.some(member => 
+      member.user.toString() === req.user._id.toString() && member.role === 'admin'
+    );
+    
+    if (!isCreator && !isAdmin) {
+      return res.status(401).json({ success: false, error: 'Not authorized to add members' });
+    }
+
+    const userToAdd = await User.findOne({ email });
+    if (!userToAdd) {
+      return res.status(404).json({ success: false, error: 'User with this email not found' });
+    }
+
+    const isMember = flat.members.some(member => member.user.toString() === userToAdd._id.toString());
+    if (isMember) {
+      return res.status(400).json({ success: false, error: 'User is already a member' });
+    }
+
+    flat.members.push({ user: userToAdd._id, role: 'member' });
+    await flat.save();
+
+    await User.findByIdAndUpdate(userToAdd._id, { $push: { flats: flat._id } });
+
+    res.status(200).json({ success: true, data: flat });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// @desc    Remove member from flat
+// @route   DELETE /api/flats/:id/members/:userId
+// @access  Private
+const removeMember = async (req, res) => {
+  try {
+    const flat = await Flat.findById(req.params.id);
+    const userIdToRemove = req.params.userId;
+
+    if (!flat) {
+      return res.status(404).json({ success: false, error: 'Flat not found' });
+    }
+
+    // Verify user is the creator or an admin
+    const isCreator = flat.createdBy.toString() === req.user._id.toString();
+    const isAdmin = flat.members.some(member => 
+      member.user.toString() === req.user._id.toString() && member.role === 'admin'
+    );
+    
+    if (!isCreator && !isAdmin) {
+      return res.status(401).json({ success: false, error: 'Not authorized to remove members' });
+    }
+
+    // Cannot remove the creator
+    if (flat.createdBy.toString() === userIdToRemove) {
+      return res.status(400).json({ success: false, error: 'Cannot remove the creator of the group' });
+    }
+
+    const isMember = flat.members.some(member => member.user.toString() === userIdToRemove);
+    if (!isMember) {
+      return res.status(400).json({ success: false, error: 'User is not a member of this group' });
+    }
+
+    // Remove user from flat members
+    flat.members = flat.members.filter(member => member.user.toString() !== userIdToRemove);
+    await flat.save();
+
+    // Remove flat from user's flats list
+    await User.findByIdAndUpdate(userIdToRemove, { $pull: { flats: flat._id } });
+
+    res.status(200).json({ success: true, data: flat });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 module.exports = {
   createFlat,
   joinFlat,
   getFlat,
   getMyFlats,
   updateFlat,
-  deleteFlat
+  deleteFlat,
+  addMember,
+  removeMember
 };

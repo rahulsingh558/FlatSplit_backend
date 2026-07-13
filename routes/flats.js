@@ -1,5 +1,5 @@
 const express = require('express');
-const { createFlat, joinFlat, getFlat, getMyFlats, updateFlat, deleteFlat } = require('../controllers/flatController');
+const { createFlat, joinFlat, getFlat, getMyFlats, updateFlat, deleteFlat, addMember, removeMember } = require('../controllers/flatController');
 const { protect } = require('../middleware/auth');
 
 const router = express.Router();
@@ -17,5 +17,8 @@ router.route('/:id')
   .get(getFlat)
   .put(updateFlat)
   .delete(deleteFlat);
+
+router.post('/:id/members', addMember);
+router.delete('/:id/members/:userId', removeMember);
 
 module.exports = router;
