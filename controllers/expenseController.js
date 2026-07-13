@@ -347,7 +347,7 @@ const requestDeleteExpense = async (req, res) => {
       
       const io = req.app.get('io');
       if (io) {
-        io.to(flat._id.toString()).emit('expenseDeleted', expense._id);
+        io.to(flat._id.toString()).emit('expenseDeleted', expense._id.toString());
       }
       return res.status(200).json({ success: true, message: 'Expense deleted' });
     }
@@ -420,7 +420,7 @@ const respondDeleteExpense = async (req, res) => {
       await expense.deleteOne();
       
       if (io) {
-        io.to(flat._id.toString()).emit('expenseDeleted', expense._id);
+        io.to(flat._id.toString()).emit('expenseDeleted', expense._id.toString());
       }
       return res.status(200).json({ success: true, message: 'Expense deleted' });
     } else {
