@@ -468,7 +468,7 @@ const parseReceiptImage = async (req, res) => {
         {
           role: 'user',
           parts: [
-            { text: 'Extract the following details from this receipt and return ONLY valid JSON with keys: "title" (string), "amount" (number, total amount), "date" (string, YYYY-MM-DD format). For "title", normally use the merchant name. However, if the receipt is from a quick commerce app like Zepto, Swiggy Instamart, Blinkit, Amazon Now, or Flipkart Minutes, set the title to the primary item\\'s name (maximum 3 words) instead of the merchant name. If any value is missing or unclear, omit the key or return null for it. Do not include markdown formatting or backticks around the JSON.' },
+            { text: `Extract the following details from this receipt and return ONLY valid JSON with keys: "title" (string), "amount" (number, total amount), "date" (string, YYYY-MM-DD format). For "title", normally use the merchant name. However, if the receipt is from a quick commerce app like Zepto, Swiggy Instamart, Blinkit, Amazon Now, or Flipkart Minutes, set the title to the platform name followed by a hyphen and a comma-separated list of ALL the purchased items (e.g., "Zepto - Milk, Eggs, Bread"). Shorten each item's name to a maximum of 3 words. If any value is missing or unclear, omit the key or return null for it. Do not include markdown formatting or backticks around the JSON.` },
             { inlineData: { mimeType: req.file.mimetype, data: base64Data } }
           ]
         }
