@@ -3,6 +3,7 @@ const Message = require('../models/Message');
 const Flat = require('../models/Flat');
 const cloudinary = require('../config/cloudinary');
 const calculateSplit = require('../utils/splitCalculator');
+const { GoogleGenAI } = require('@google/genai');
 
 // Helper to upload buffer to cloudinary
 const streamUpload = (buffer) => {
@@ -445,6 +446,49 @@ const respondDeleteExpense = async (req, res) => {
   }
 };
 
+// @desc    Parse receipt image using Gemini API
+// @route   POST /api/expenses/parse-receipt
+// @access  Private
+const parseReceiptImage = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'Please upload an image' });
+    }
+
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ success: false, error: 'Gemini API key is missing in backend configuration' });
+    }
+
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const base64Data = req.file.buffer.toString('base64');
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-flash-latest',
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: 'Extract the following details from this receipt and return ONLY valid JSON with keys: "title" (string), "amount" (number, total amount), "date" (string, YYYY-MM-DD format). For "title", normally use the merchant name. However, if the receipt is from a quick commerce app like Zepto, Swiggy Instamart, Blinkit, Amazon Now, or Flipkart Minutes, set the title to the primary item\\'s name (maximum 3 words) instead of the merchant name. If any value is missing or unclear, omit the key or return null for it. Do not include markdown formatting or backticks around the JSON.' },
+            { inlineData: { mimeType: req.file.mimetype, data: base64Data } }
+          ]
+        }
+      ]
+    });
+
+    let text = typeof response.text === 'function' ? response.text() : response.text;
+    text = text.trim();
+    if (text.startsWith('```json')) text = text.substring(7);
+    if (text.startsWith('```')) text = text.substring(3);
+    if (text.endsWith('```')) text = text.substring(0, text.length - 3);
+
+    const data = JSON.parse(text.trim());
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    console.error('Error parsing receipt:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 module.exports = {
   createExpense,
   getMyExpenses,
@@ -452,5 +496,6 @@ module.exports = {
   closeExpense,
   getExpensesBetweenUsers,
   requestDeleteExpense,
-  respondDeleteExpense
+  respondDeleteExpense,
+  parseReceiptImage
 };

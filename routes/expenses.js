@@ -1,5 +1,5 @@
 const express = require('express');
-const { createExpense, getMyExpenses, updateExpense, closeExpense, getExpensesBetweenUsers, requestDeleteExpense, respondDeleteExpense } = require('../controllers/expenseController');
+const { createExpense, getMyExpenses, updateExpense, closeExpense, getExpensesBetweenUsers, requestDeleteExpense, respondDeleteExpense, parseReceiptImage } = require('../controllers/expenseController');
 const { protect } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 
@@ -11,6 +11,9 @@ router.use(protect);
 router.route('/me').get(getMyExpenses);
 
 router.route('/flat/:flatId/between/:userId').get(getExpensesBetweenUsers);
+
+router.route('/parse-receipt')
+  .post(upload.single('receipt'), parseReceiptImage);
 
 router.route('/')
   .post(upload.single('receipt'), createExpense);
